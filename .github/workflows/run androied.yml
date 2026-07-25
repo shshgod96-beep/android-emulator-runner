@@ -18,12 +18,35 @@ jobs:
       - name: Install Desktop & VNC (تثبيت واجهة وشاشة وهمية)
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xvfb x11vnc
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xvfb x11vnc dbus-x11
 
       - name: Setup Tailscale (تجهيز الاتصال الآمن)
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Download rootAVD and LSPosed (تحميل أدوات الروت)
+        run: |
+          # تحميل rootAVD لتثبيت Magisk
+          git clone https://github.com/newbit1/rootAVD.git
+          
+          # تحميل LSPosed (أحدث إصدار Zygisk)
+          LSPOSED_URL=$(curl -s https://api.github.com/repos/LSPosed/LSPosed/releases/latest | grep -oP 'https://[^"]*LSPosed-v[^"]*-zygisk-release\.zip' | head -1)
+          if [ -n "$LSPOSED_URL" ]; then
+            wget -q "$LSPOSED_URL" -O LSPosed.zip
+          else
+            wget -q "https://github.com/LSPosed/LSPosed/releases/download/v1.9.2/LSPosed-v1.9.2-7024-zygisk-release.zip" -O LSPosed.zip
+          fi
+          
+          # إنشاء سكربت يعمل تلقائياً قبل تشغيل المحاكي لتفليش Magisk
+          cat > $GITHUB_WORKSPACE/patch-ramdisk.sh << 'EOF'
+          #!/bin/bash
+          echo "⏳ جاري تثبيت Magisk عبر rootAVD..."
+          cd $GITHUB_WORKSPACE/rootAVD
+          ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/default/x86_64/ramdisk.img
+          echo "✅ تم تفليش Magisk بنجاح!"
+          EOF
+          chmod +x $GITHUB_WORKSPACE/patch-ramdisk.sh
 
       - name: Start Screen and VNC Server
         run: |
@@ -43,16 +66,44 @@ jobs:
           echo "ثم افتحه في برنامج VNC Viewer."
           echo "=========================================================="
 
-      - name: Start Android Emulator
+      - name: Start Android Emulator with Root
         uses: reactivecircus/android-emulator-runner@v2
         env:
-          DISPLAY: :0 # هذا الأمر يخبر المحاكي أن يظهر على الشاشة التي أنشأناها
+          DISPLAY: :0
         with:
           api-level: 29
           target: default
           arch: x86_64
           profile: pixel_6
-          emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim # أزلنا no-window لكي تظهر الشاشة
+          emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          pre-emulator-launch-script: ${{ github.workspace }}/patch-ramdisk.sh
           script: |
-            echo "المحاكي يعمل الآن... يمكنك الدخول وتجربة تطبيقك بحرية!"
-            sleep 3600 # سيبقى السيرفر يعمل لمدة ساعة
+            echo "⏳ جاري تجهيز Magisk و LSPosed..."
+            
+            # انتظار اكتمال تشغيل المحاكي
+            adb wait-for-device
+            sleep 15
+            
+            # التأكد من أن Magisk يعمل
+            echo "🔍 فحص حالة Magisk..."
+            adb shell "su -c 'magisk -v'" && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk قد يحتاج إعادة تشغيل"
+            
+            # تفعيل Zygisk (مطلوب لـ LSPosed)
+            adb shell "su -c 'magisk --sqlite \"REPLACE INTO settings (key,value) VALUES(\\\"zygisk\\\",1);\"'"
+            
+            # تثبيت LSPosed كموديول Magisk
+            if [ -f "$GITHUB_WORKSPACE/LSPosed.zip" ]; then
+              adb push $GITHUB_WORKSPACE/LSPosed.zip /sdcard/LSPosed.zip
+              adb shell "su -c 'magisk --install-module /sdcard/LSPosed.zip'"
+              echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
+              adb reboot
+              sleep 30
+              adb wait-for-device
+              sleep 20
+            fi
+            
+            echo "=========================================================="
+            echo "✅ المحاكي جاهز مع Root + LSPosed!"
+            echo "يمكنك الدخول عبر VNC وتجربة تطبيقك الآن"
+            echo "=========================================================="
+            sleep 3600
