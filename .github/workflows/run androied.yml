@@ -25,39 +25,38 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Download rootAVD and LSPosed (تحميل أدوات الروت)
+      - name: Install System Image and Patch with Magisk (تثبيت وتفليش Magisk)
         run: |
+          # تثبيت صورة النظام أولاً
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "system-images;android-29;default;x86_64"
+          
           # تحميل rootAVD لتثبيت Magisk
           git clone https://github.com/newbit1/rootAVD.git
+          cd rootAVD
           
-          # تحميل LSPosed (أحدث إصدار Zygisk)
-          LSPOSED_URL=$(curl -s https://api.github.com/repos/LSPosed/LSPosed/releases/latest | grep -oP 'https://[^"]*LSPosed-v[^"]*-zygisk-release\.zip' | head -1)
-          if [ -n "$LSPOSED_URL" ]; then
-            wget -q "$LSPOSED_URL" -O LSPosed.zip
-          else
-            wget -q "https://github.com/LSPosed/LSPosed/releases/download/v1.9.2/LSPosed-v1.9.2-7024-zygisk-release.zip" -O LSPosed.zip
-          fi
+          # عرض الصور المتاحة للتأكد من المسار
+          ./rootAVD.sh ListAllAVDs
           
-          # إنشاء سكربت يعمل تلقائياً قبل تشغيل المحاكي لتفليش Magisk
-          cat > $GITHUB_WORKSPACE/patch-ramdisk.sh << 'EOF'
-          #!/bin/bash
-          echo "⏳ جاري تثبيت Magisk عبر rootAVD..."
-          cd $GITHUB_WORKSPACE/rootAVD
+          # تفليش Magisk في صورة النظام
+          echo "⏳ جاري تفليش Magisk..."
           ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/default/x86_64/ramdisk.img
           echo "✅ تم تفليش Magisk بنجاح!"
-          EOF
-          chmod +x $GITHUB_WORKSPACE/patch-ramdisk.sh
+
+      - name: Download LSPosed (تحميل LSPosed)
+        run: |
+          LSPOSED_URL=$(curl -s https://api.github.com/repos/LSPosed/LSPosed/releases/latest | grep -oP 'https://[^"]*LSPosed-v[^"]*-zygisk-release\.zip' | head -1)
+          if [ -n "$LSPOSED_URL" ]; then
+            wget -q "$LSPOSED_URL" -O $GITHUB_WORKSPACE/LSPosed.zip
+          else
+            wget -q "https://github.com/LSPosed/LSPosed/releases/download/v1.9.2/LSPosed-v1.9.2-7024-zygisk-release.zip" -O $GITHUB_WORKSPACE/LSPosed.zip
+          fi
+          echo "✅ تم تحميل LSPosed"
 
       - name: Start Screen and VNC Server
         run: |
-          # إنشاء شاشة وهمية
           Xvfb :0 -screen 0 1920x1080x24 &
           sleep 2
-          
-          # تشغيل واجهة سطح المكتب
           DISPLAY=:0 xfce4-session &
-          
-          # تشغيل بث الشاشة (VNC) بدون باسورد لتسهيل الدخول
           x11vnc -display :0 -nopw -xkb -ncache 10 -ncache_cr -forever &
           
           echo "=========================================================="
@@ -76,34 +75,36 @@ jobs:
           arch: x86_64
           profile: pixel_6
           emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          pre-emulator-launch-script: ${{ github.workspace }}/patch-ramdisk.sh
           script: |
             echo "⏳ جاري تجهيز Magisk و LSPosed..."
             
-            # انتظار اكتمال تشغيل المحاكي
-            adb wait-for-device
-            sleep 15
+            # تشغيل adb كروت (يعمل على صور default بدون مشاكل)
+            adb root
+            sleep 5
             
-            # التأكد من أن Magisk يعمل
-            echo "🔍 فحص حالة Magisk..."
-            adb shell "su -c 'magisk -v'" && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk قد يحتاج إعادة تشغيل"
+            # فحص حالة Magisk
+            echo "🔍 فحص Magisk..."
+            adb shell "magisk -v" 2>/dev/null && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk غير متاح، سيتم المتابعة..."
             
             # تفعيل Zygisk (مطلوب لـ LSPosed)
-            adb shell "su -c 'magisk --sqlite \"REPLACE INTO settings (key,value) VALUES(\\\"zygisk\\\",1);\"'"
+            adb shell "magisk --sqlite \"REPLACE INTO settings (key,value) VALUES('zygisk',1);\"" 2>/dev/null || true
             
             # تثبيت LSPosed كموديول Magisk
             if [ -f "$GITHUB_WORKSPACE/LSPosed.zip" ]; then
               adb push $GITHUB_WORKSPACE/LSPosed.zip /sdcard/LSPosed.zip
-              adb shell "su -c 'magisk --install-module /sdcard/LSPosed.zip'"
-              echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
-              adb reboot
-              sleep 30
-              adb wait-for-device
-              sleep 20
+              adb shell "magisk --install-module /sdcard/LSPosed.zip" 2>/dev/null && {
+                echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
+                adb reboot
+                sleep 40
+                adb wait-for-device
+                sleep 20
+                adb root
+                sleep 3
+              } || echo "⚠️ لم يتم تثبيت LSPosed، قد يحتاج تثبيت يدوي"
             fi
             
             echo "=========================================================="
-            echo "✅ المحاكي جاهز مع Root + LSPosed!"
-            echo "يمكنك الدخول عبر VNC وتجربة تطبيقك الآن"
+            echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC"
             echo "=========================================================="
             sleep 3600
+
