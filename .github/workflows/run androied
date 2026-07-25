@@ -1,27 +1,58 @@
-name: Run Android Emulator
+name: Run Android Emulator with UI
 on: 
-  workflow_dispatch: # هذا يجعلك قادراً على تشغيله يدوياً من قسم Actions
+  workflow_dispatch:
 
 jobs:
   run-emulator:
-    runs-on: ubuntu-latest # يُنصح باستخدام أوبونتو لأنه أسرع ويدعم تسريع الهاردوير الآن
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Enable KVM (تسريع الهاردوير للمحاكي)
+      - name: Enable KVM (تسريع الهاردوير)
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Start Android Emulator
-        # هنا نستدعي الأداة التي نتحدث عنها لتشغيل المحاكي
-        uses: reactivecircus/android-emulator-runner@v2
+      - name: Install Desktop & VNC (تثبيت واجهة وشاشة وهمية)
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xvfb x11vnc
+
+      - name: Setup Tailscale (تجهيز الاتصال الآمن)
+        uses: tailscale/github-action@v2
         with:
-          api-level: 29 # إصدار الأندرويد
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Start Screen and VNC Server
+        run: |
+          # إنشاء شاشة وهمية
+          Xvfb :0 -screen 0 1920x1080x24 &
+          sleep 2
+          
+          # تشغيل واجهة سطح المكتب
+          DISPLAY=:0 xfce4-session &
+          
+          # تشغيل بث الشاشة (VNC) بدون باسورد لتسهيل الدخول
+          x11vnc -display :0 -nopw -xkb -ncache 10 -ncache_cr -forever &
+          
+          echo "=========================================================="
+          echo "✅ الاتصال جاهز عبر Tailscale!"
+          echo "افتح تطبيق Tailscale في جهازك، وانسخ الـ IP الخاص بجهاز (github-actions-...)"
+          echo "ثم افتحه في برنامج VNC Viewer."
+          echo "=========================================================="
+
+      - name: Start Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          DISPLAY: :0 # هذا الأمر يخبر المحاكي أن يظهر على الشاشة التي أنشأناها
+        with:
+          api-level: 29
           target: default
           arch: x86_64
           profile: pixel_6
-          script: echo "المحاكي يعمل الآن بنجاح!" && sleep 3600 
-          # أمر sleep 3600 سيجعل السيرفر يظل يعمل لمدة ساعة إذا كنت تريد الاتصال به
+          emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim # أزلنا no-window لكي تظهر الشاشة
+          script: |
+            echo "المحاكي يعمل الآن... يمكنك الدخول وتجربة تطبيقك بحرية!"
+            sleep 3600 # سيبقى السيرفر يعمل لمدة ساعة
