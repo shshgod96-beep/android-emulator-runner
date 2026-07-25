@@ -59,11 +59,52 @@ jobs:
           DISPLAY=:0 xfce4-session &
           x11vnc -display :0 -nopw -xkb -ncache 10 -ncache_cr -forever &
           
+          TS_IP=$(tailscale ip -4)
           echo "=========================================================="
           echo "✅ الاتصال جاهز عبر Tailscale!"
-          echo "افتح تطبيق Tailscale في جهازك، وانسخ الـ IP الخاص بجهاز (github-actions-...)"
-          echo "ثم افتحه في برنامج VNC Viewer."
+          echo "انسخ هذا الـ IP وضعه في برنامج VNC Viewer للاتصال:"
+          echo "👉  $TS_IP  👈"
           echo "=========================================================="
+
+      - name: Create Emulator Script
+        run: |
+          cat > $GITHUB_WORKSPACE/run_emulator.sh << 'EOF'
+          #!/bin/bash
+          echo "⏳ جاري تجهيز Magisk و LSPosed..."
+          
+          # تشغيل adb كروت
+          adb root
+          sleep 5
+          
+          # فحص حالة Magisk
+          echo "🔍 فحص Magisk..."
+          adb shell "magisk -v" 2>/dev/null && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk غير متاح، سيتم المتابعة..."
+          
+          # تفعيل Zygisk (مطلوب لـ LSPosed)
+          adb shell "magisk --sqlite \"REPLACE INTO settings (key,value) VALUES('zygisk',1);\"" 2>/dev/null || true
+          
+          # تثبيت LSPosed كموديول Magisk
+          if [ -f "$GITHUB_WORKSPACE/LSPosed.zip" ]; then
+            adb push $GITHUB_WORKSPACE/LSPosed.zip /sdcard/LSPosed.zip
+            if adb shell "magisk --install-module /sdcard/LSPosed.zip" 2>/dev/null; then
+              echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
+              adb reboot
+              sleep 40
+              adb wait-for-device
+              sleep 20
+              adb root
+              sleep 3
+            else
+              echo "⚠️ لم يتم تثبيت LSPosed، قد يحتاج تثبيت يدوي"
+            fi
+          fi
+          
+          echo "=========================================================="
+          echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC"
+          echo "=========================================================="
+          sleep 3600
+          EOF
+          chmod +x $GITHUB_WORKSPACE/run_emulator.sh
 
       - name: Start Android Emulator with Root
         uses: reactivecircus/android-emulator-runner@v2
@@ -76,37 +117,5 @@ jobs:
           profile: pixel_6
           emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            echo "⏳ جاري تجهيز Magisk و LSPosed..."
-            
-            # تشغيل adb كروت (يعمل على صور default بدون مشاكل)
-            adb root
-            sleep 5
-            
-            # فحص حالة Magisk
-            echo "🔍 فحص Magisk..."
-            adb shell "magisk -v" 2>/dev/null && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk غير متاح، سيتم المتابعة..."
-            
-            # تفعيل Zygisk (مطلوب لـ LSPosed)
-            adb shell "magisk --sqlite \"REPLACE INTO settings (key,value) VALUES('zygisk',1);\"" 2>/dev/null || true
-            
-            # تثبيت LSPosed كموديول Magisk
-            if [ -f "$GITHUB_WORKSPACE/LSPosed.zip" ]; then
-              adb push $GITHUB_WORKSPACE/LSPosed.zip /sdcard/LSPosed.zip
-              if adb shell "magisk --install-module /sdcard/LSPosed.zip" 2>/dev/null; then
-                echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
-                adb reboot
-                sleep 40
-                adb wait-for-device
-                sleep 20
-                adb root
-                sleep 3
-              else
-                echo "⚠️ لم يتم تثبيت LSPosed، قد يحتاج تثبيت يدوي"
-              fi
-            fi
-            
-            echo "=========================================================="
-            echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC"
-            echo "=========================================================="
-            sleep 3600
+            bash $GITHUB_WORKSPACE/run_emulator.sh
 
