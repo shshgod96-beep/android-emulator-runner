@@ -92,7 +92,7 @@ jobs:
             # تثبيت LSPosed كموديول Magisk
             if [ -f "$GITHUB_WORKSPACE/LSPosed.zip" ]; then
               adb push $GITHUB_WORKSPACE/LSPosed.zip /sdcard/LSPosed.zip
-              adb shell "magisk --install-module /sdcard/LSPosed.zip" 2>/dev/null && {
+              if adb shell "magisk --install-module /sdcard/LSPosed.zip" 2>/dev/null; then
                 echo "✅ تم تثبيت LSPosed! جاري إعادة التشغيل..."
                 adb reboot
                 sleep 40
@@ -100,7 +100,9 @@ jobs:
                 sleep 20
                 adb root
                 sleep 3
-              } || echo "⚠️ لم يتم تثبيت LSPosed، قد يحتاج تثبيت يدوي"
+              else
+                echo "⚠️ لم يتم تثبيت LSPosed، قد يحتاج تثبيت يدوي"
+              fi
             fi
             
             echo "=========================================================="
