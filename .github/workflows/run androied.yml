@@ -54,34 +54,39 @@ jobs:
           #!/bin/bash
           echo "⏳ جاري تجهيز المحاكي..."
           
-          # تشغيل adb كروت
-          adb root
-          sleep 5
-          adb wait-for-device
-          
-          # تحميل أداة rootAVD من جيتهاب
+          # 1# تحميل rootAVD
           git clone https://github.com/newbit1/rootAVD.git
-          cd rootAVD
           
-          # تعريف مسار الأندرويد للنظام
+          # 2# الدخول لمجلد rootAVD
+          cd ~/work/android-emulator-runner/android-emulator-runner/rootAVD
+          
+          # 3# تعريف مسار Android SDK
           export ANDROID_HOME=/usr/local/lib/android/sdk
           
-          # تثبيت الروت (Magisk) داخل ملفات المحاكي
-          ./rootAVD.sh /usr/local/lib/android/sdk/system-images/android-29/google_apis/x86_64/ramdisk.img
+          # 4# تفليش Magisk في صورة النظام (المحاكي هيقفل تلقائياً بعدها)
+          echo "⏳ جاري تفليش Magisk..."
+          ./rootAVD.sh system-images/android-29/google_apis/x86_64/ramdisk.img
+          echo "✅ تم تفليش Magisk! جاري إعادة تشغيل المحاكي..."
           
-          # انتظار إعادة تشغيل المحاكي (rootAVD يعمل reboot تلقائياً)
-          # 1. وقف السكربت لحد ما المحاكي يفتح بالكامل
-          adb wait-for-device
+          # 5# إعادة تشغيل المحاكي بـ Cold Boot عشان الروت يشتغل
+          DISPLAY=:0 /usr/local/lib/android/sdk/emulator/emulator -avd test -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim &
           
-          # ننتظر 30 ثانية احتياطي عشان نظام الأندرويد وتطبيق ماجيسك يكونوا حملوا بالكامل في الخلفية
+          # استنى المحاكي يفتح بالكامل
+          echo "⏳ جاري انتظار المحاكي..."
+          /usr/local/lib/android/sdk/platform-tools/adb wait-for-device
           sleep 30
           
-          # 2. تفعيل صلاحيات الروت لسطر أوامر ADB نفسه عشان نقدر نعدل في النظام
-          adb root
-          sleep 2
+          # 6# تشغيل adb كروت
+          /usr/local/lib/android/sdk/platform-tools/adb root
           
-          # 3. الأمر السحري: تعديل إعدادات Magisk لـ (الموافقة التلقائية) بدلاً من (السؤال)
-          adb shell "magisk --sqlite \"REPLACE INTO settings (key, value) VALUES ('su_auto_response', 2);\""
+          # 7# استنى شوية عشان adb يرجع
+          sleep 3
+          
+          # 8# تفعيل منح صلاحيات الروت تلقائياً لكل التطبيقات
+          /usr/local/lib/android/sdk/platform-tools/adb shell "magisk --sqlite \"REPLACE INTO settings (key, value) VALUES ('su_auto_response', 2);\""
+          
+          # 9# إعادة تشغيل تطبيق Magisk لتطبيق الإعدادات
+          /usr/local/lib/android/sdk/platform-tools/adb shell am force-stop com.topjohnwu.magisk
           
           echo "=========================================================="
           echo "✅ المحاكي جاهز مع Root! يمكنك الدخول عبر VNC"
