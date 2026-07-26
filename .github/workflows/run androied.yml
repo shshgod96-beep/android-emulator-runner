@@ -80,6 +80,14 @@ jobs:
           echo "🔍 فحص Magisk..."
           adb shell "magisk -v" 2>/dev/null && echo "✅ Magisk يعمل!" || echo "⚠️ Magisk غير متاح، سيتم المتابعة..."
           
+          # تحميل وتثبيت تطبيق Magisk (الواجهة)
+          echo "⬇️ جاري تثبيت تطبيق Magisk Manager..."
+          MAGISK_APK_URL=$(curl -s https://api.github.com/repos/topjohnwu/Magisk/releases/latest | grep -oP 'https://[^"]*Magisk-v[^"]*\.apk' | head -1)
+          if [ -n "$MAGISK_APK_URL" ]; then
+            wget -q "$MAGISK_APK_URL" -O $GITHUB_WORKSPACE/magisk.apk
+            adb install $GITHUB_WORKSPACE/magisk.apk || echo "⚠️ فشل تثبيت تطبيق Magisk"
+          fi
+          
           # تفعيل Zygisk (مطلوب لـ LSPosed)
           adb shell "magisk --sqlite \"REPLACE INTO settings (key,value) VALUES('zygisk',1);\"" 2>/dev/null || true
           
@@ -102,7 +110,7 @@ jobs:
           echo "=========================================================="
           echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC"
           echo "=========================================================="
-          sleep 3600
+          sleep 21600
           EOF
           chmod +x $GITHUB_WORKSPACE/run_emulator.sh
 
