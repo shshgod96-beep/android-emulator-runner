@@ -59,8 +59,32 @@ jobs:
           sleep 5
           adb wait-for-device
           
+          # تحميل أداة rootAVD من جيتهاب
+          git clone https://github.com/newbit1/rootAVD.git
+          cd rootAVD
+          
+          # تعريف مسار الأندرويد للنظام
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          
+          # تثبيت الروت (Magisk) داخل ملفات المحاكي
+          ./rootAVD.sh /usr/local/lib/android/sdk/system-images/android-29/google_apis/x86_64/ramdisk.img
+          
+          # انتظار إعادة تشغيل المحاكي (rootAVD يعمل reboot تلقائياً)
+          # 1. وقف السكربت لحد ما المحاكي يفتح بالكامل
+          adb wait-for-device
+          
+          # ننتظر 30 ثانية احتياطي عشان نظام الأندرويد وتطبيق ماجيسك يكونوا حملوا بالكامل في الخلفية
+          sleep 30
+          
+          # 2. تفعيل صلاحيات الروت لسطر أوامر ADB نفسه عشان نقدر نعدل في النظام
+          adb root
+          sleep 2
+          
+          # 3. الأمر السحري: تعديل إعدادات Magisk لـ (الموافقة التلقائية) بدلاً من (السؤال)
+          adb shell "magisk --sqlite \"REPLACE INTO settings (key, value) VALUES ('su_auto_response', 2);\""
+          
           echo "=========================================================="
-          echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC للتجربة"
+          echo "✅ المحاكي جاهز مع Root! يمكنك الدخول عبر VNC"
           echo "=========================================================="
           sleep 21600
           EOF
