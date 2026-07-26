@@ -39,7 +39,7 @@ jobs:
           
           # تفليش Magisk في صورة النظام
           echo "⏳ جاري تفليش Magisk..."
-          ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/default/x86_64/ramdisk.img
+          echo "1" | ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/default/x86_64/ramdisk.img
           echo "✅ تم تفليش Magisk بنجاح!"
 
       - name: Download LSPosed (تحميل LSPosed)
