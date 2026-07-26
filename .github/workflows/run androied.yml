@@ -54,42 +54,68 @@ jobs:
           #!/bin/bash
           echo "⏳ جاري تجهيز المحاكي..."
           
-          # 1# تحميل rootAVD
+          # ==========================================
+          # 1. المرحلة الأولى: تحميل ودمج الروت
+          # ==========================================
           git clone https://github.com/newbit1/rootAVD.git
-          
-          # 2# الدخول لمجلد rootAVD
           cd ~/work/android-emulator-runner/android-emulator-runner/rootAVD
-          
-          # 3# تعريف مسار Android SDK
           export ANDROID_HOME=/usr/local/lib/android/sdk
-          
-          # 4# تفليش Magisk في صورة النظام (المحاكي هيقفل تلقائياً بعدها)
-          echo "⏳ جاري تفليش Magisk..."
           ./rootAVD.sh system-images/android-29/google_apis/x86_64/ramdisk.img
-          echo "✅ تم تفليش Magisk! جاري إعادة تشغيل المحاكي..."
           
-          # 5# إعادة تشغيل المحاكي بـ Cold Boot عشان الروت يشتغل
+          # ==========================================
+          # 2. المرحلة الثانية: تشغيل المحاكي والانتظار
+          # ==========================================
           DISPLAY=:0 /usr/local/lib/android/sdk/emulator/emulator -avd test -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim &
           
-          # استنى المحاكي يفتح بالكامل
-          echo "⏳ جاري انتظار المحاكي..."
+          # ننتظر لحد ما المحاكي يفتح بالكامل
           /usr/local/lib/android/sdk/platform-tools/adb wait-for-device
           sleep 30
           
-          # 6# تشغيل adb كروت
+          # ==========================================
+          # 3. المرحلة الثالثة: إعطاء الصلاحيات تلقائياً وتفعيل Zygisk
+          # ==========================================
+          # تفعيل الروت لـ ADB نفسه
           /usr/local/lib/android/sdk/platform-tools/adb root
-          
-          # 7# استنى شوية عشان adb يرجع
           sleep 3
           
-          # 8# تفعيل منح صلاحيات الروت تلقائياً لكل التطبيقات
+          # إعطاء الروت لأي تطبيق أوتوماتيك (بدون سؤال)
           /usr/local/lib/android/sdk/platform-tools/adb shell "magisk --sqlite \"REPLACE INTO settings (key, value) VALUES ('su_auto_response', 2);\""
           
-          # 9# إعادة تشغيل تطبيق Magisk لتطبيق الإعدادات
-          /usr/local/lib/android/sdk/platform-tools/adb shell am force-stop com.topjohnwu.magisk
+          # تفعيل خاصية Zygisk (الضرورية لبرنامج LSPosed)
+          /usr/local/lib/android/sdk/platform-tools/adb shell "magisk --sqlite \"REPLACE INTO settings (key, value) VALUES ('zygisk', 1);\""
+          
+          # ==========================================
+          # 4. المرحلة الرابعة: تخطي رسالة "Additional Setup" برمجياً
+          # ==========================================
+          /usr/local/lib/android/sdk/platform-tools/adb shell monkey -p com.topjohnwu.magisk -c android.intent.category.LAUNCHER 1
+          sleep 5
+          /usr/local/lib/android/sdk/platform-tools/adb shell input keyevent 22
+          /usr/local/lib/android/sdk/platform-tools/adb shell input keyevent 66
+          
+          # ننتظر المحاكي يعمل ريستارت ويفتح تاني بعد التهيئة
+          /usr/local/lib/android/sdk/platform-tools/adb wait-for-device
+          sleep 30
+          
+          # ==========================================
+          # 5. المرحلة الخامسة: تحميل وتثبيت LSPosed
+          # ==========================================
+          wget https://github.com/LSPosed/LSPosed/releases/download/v1.9.2/LSPosed-v1.9.2-7024-zygisk-release.zip -O lsposed.zip
+          /usr/local/lib/android/sdk/platform-tools/adb push lsposed.zip /data/local/tmp/
+          /usr/local/lib/android/sdk/platform-tools/adb shell su -c "magisk --install-module /data/local/tmp/lsposed.zip"
+          
+          # ==========================================
+          # 6. المرحلة الأخيرة: الريستارت النهائي والتنظيف
+          # ==========================================
+          /usr/local/lib/android/sdk/platform-tools/adb reboot
+          /usr/local/lib/android/sdk/platform-tools/adb wait-for-device
+          sleep 30
+          
+          rm lsposed.zip
+          /usr/local/lib/android/sdk/platform-tools/adb shell rm /data/local/tmp/lsposed.zip
           
           echo "=========================================================="
-          echo "✅ المحاكي جاهز مع Root! يمكنك الدخول عبر VNC"
+          echo "✅ تم بنجاح! الروت يعمل، الصلاحيات تلقائية، و LSPosed مفعل."
+          echo "✅ المحاكي جاهز! يمكنك الدخول عبر VNC"
           echo "=========================================================="
           sleep 21600
           EOF
