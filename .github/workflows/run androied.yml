@@ -28,7 +28,7 @@ jobs:
       - name: Install System Image and Patch with Magisk (تثبيت وتفليش Magisk)
         run: |
           # تثبيت صورة النظام أولاً
-          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "system-images;android-29;default;x86_64"
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "system-images;android-29;google_apis;x86_64"
           
           # تحميل rootAVD لتثبيت Magisk
           git clone https://github.com/newbit1/rootAVD.git
@@ -39,7 +39,7 @@ jobs:
           
           # تفليش Magisk في صورة النظام
           echo "⏳ جاري تفليش Magisk..."
-          echo "1" | ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/default/x86_64/ramdisk.img
+          echo "1" | ./rootAVD.sh $ANDROID_SDK_ROOT/system-images/android-29/google_apis/x86_64/ramdisk.img
           echo "✅ تم تفليش Magisk بنجاح!"
 
       - name: Download LSPosed (تحميل LSPosed)
@@ -120,7 +120,7 @@ jobs:
           DISPLAY: :0
         with:
           api-level: 29
-          target: default
+          target: google_apis
           arch: x86_64
           profile: pixel_6
           emulator-options: -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
